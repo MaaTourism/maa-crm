@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Maa Tours & Travels — CRM v1.4.9 | QR Code Documents</title>
+<title>Maa Tours & Travels — CRM v1.5.0 | Firebase Cloud Connected 🔥</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
@@ -5883,6 +5883,33 @@ G.renderAllQRCodes=function(){document.querySelectorAll('[data-qr]:not([data-qr-
 
       <!-- DATA MANAGEMENT -->
       <div id="stg-body-data">
+
+        <!-- ══ 🔥 FIREBASE CLOUD DATABASE CARD ══ -->
+        <div id="maa-firebase-settings-card" style="border-radius:12px;border:1.5px solid rgba(16,216,118,0.5);background:linear-gradient(135deg,rgba(16,216,118,0.08),rgba(240,165,0,0.04));padding:16px 18px;margin-bottom:18px">
+          <div style="display:flex;align-items:center;gap:14px;margin-bottom:12px">
+            <span style="font-size:24px">🔥</span>
+            <div style="flex:1">
+              <div style="font-size:14px;font-weight:700;color:var(--text)">Firebase Firestore (Cloud Database) <span style="font-size:10px;background:rgba(240,165,0,0.2);color:var(--gold);padding:2px 8px;border-radius:20px;margin-left:6px;font-weight:600">RECOMMENDED</span></div>
+              <div style="font-size:11.5px;color:var(--text-3);margin-top:2px">প্রতিটি ক্লিকে ডেটা সরাসরি Google Firebase ক্লাউডে সেভ হয় — ইন্টারনেট থাকলেই কাজ করে, যেকোনো ডিভাইস থেকে।</div>
+            </div>
+          </div>
+          <!-- Status Row -->
+          <div id="maa-fb-card-status" style="display:flex;align-items:center;gap:10px;margin-bottom:12px;padding:10px 12px;border-radius:8px;background:var(--ink-3)">
+            <span id="maa-fb-dot" style="font-size:14px">🟢</span>
+            <span id="maa-fb-txt" style="font-size:12.5px;color:#10D876">✅ Firebase সংযুক্ত — maa-tours-and-travels-e9ea2 · সব ডেটা ক্লাউডে সেভ হচ্ছে</span>
+          </div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <button onclick="openFirebaseSettings()" style="flex:1;background:linear-gradient(135deg,rgba(240,100,0,0.22),rgba(240,165,0,0.12));color:var(--gold-light,#FFD166);border:1px solid rgba(240,165,0,0.4);border-radius:8px;padding:10px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">
+              🔥 Firebase সংযুক্ত করুন / সেটিংস
+            </button>
+            <button onclick="_fbSaveToFirestore(_buildSnapshot())" style="background:rgba(16,216,118,0.1);color:#10D876;border:1px solid rgba(16,216,118,0.3);border-radius:8px;padding:10px 14px;font-size:12.5px;font-weight:600;cursor:pointer;font-family:var(--font)">
+              ☁️ এখনই সেভ
+            </button>
+          </div>
+          <div style="margin-top:10px;font-size:11px;color:var(--text-3);line-height:1.6">
+            💡 একবার সংযুক্ত হলে সব ডেটা স্বয়ংক্রিয়ভাবে ক্লাউডে সেভ হবে — ক্লায়েন্ট, বুকিং, ইনভয়েস সব কিছু। অন্য ডিভাইস বা ব্রাউজার থেকে একই Config দিয়ে সংযুক্ত হলে সব ডেটা পাবেন।
+          </div>
+        </div>
 
         <!-- ══ DATABASE FILE STATUS CARD ══ -->
         <div id="maa-db-settings-card" style="border-radius:12px;border:1.5px solid rgba(75,159,255,0.4);background:rgba(75,159,255,0.06);padding:16px 18px;margin-bottom:18px">
@@ -22986,22 +23013,269 @@ window.maaDbDisconnect = async function() {
   if (typeof showUniToast === 'function') showUniToast('🔌 DB সংযোগ বিচ্ছিন্ন হয়েছে। localStorage ব্যবহার হচ্ছে।', 'info');
 };
 
-/* ── SAVE ALL DATA (localStorage + DB file if connected) ── */
+/* ══════════════════════════════════════════════════════════════
+   🔥 FIREBASE FIRESTORE — AUTO-CONNECTED CLOUD DATABASE ENGINE
+   Replaces localStorage + FileSystem DB with real-time cloud sync
+   All data saves to Firestore on every click — zero manual steps
+══════════════════════════════════════════════════════════════ */
+
+const FIREBASE_CFG_KEY = 'maa_firebase_config_v1';
+window._fbApp      = null;
+window._fbDb       = null;
+window._fbReady    = false;
+window._fbSaving   = false;
+
+/* ── Load saved Firebase config ── */
+function _fbLoadConfig() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(FIREBASE_CFG_KEY) || 'null');
+    // Always return hardcoded config as authoritative default
+    return saved || MAA_FIREBASE_CONFIG;
+  } catch(e) { return MAA_FIREBASE_CONFIG; }
+}
+
+/* ── Initialize Firebase ── */
+async function _fbInit(cfg) {
+  try {
+    // Guard: ensure Firebase SDK is loaded
+    if (typeof firebase === 'undefined') {
+      throw new Error('Firebase SDK not loaded yet');
+    }
+    if (window._fbApp) {
+      try { await window._fbApp.delete(); } catch(e) {}
+    }
+    window._fbApp  = firebase.initializeApp(cfg, 'maa-crm-' + Date.now());
+    window._fbDb   = firebase.firestore(window._fbApp);
+    window._fbReady = true;
+    _fbUpdateBanner('connected');
+    console.log('[Firebase] ✅ Connected to Firestore — project:', cfg.projectId);
+    return true;
+  } catch(e) {
+    window._fbReady = false;
+    _fbUpdateBanner('error');
+    console.warn('[Firebase] Init failed:', e.message);
+    return false;
+  }
+}
+
+/* ── Auto-init on page load if config saved ── */
+/* ══════════════════════════════════════════════════════════════
+   🔥 MAA TOURS & TRAVELS — FIREBASE CONFIG (HARDCODED + AUTO)
+   Project: maa-tours-and-travels-e9ea2
+   App: Maa Tours Web
+══════════════════════════════════════════════════════════════ */
+const MAA_FIREBASE_CONFIG = {
+  apiKey:            "AIzaSyBoaOEzT4MwLCaIdXmL6m3jJBuVAEEhjeI",
+  authDomain:        "maa-tours-and-travels-e9ea2.firebaseapp.com",
+  databaseURL:       "https://maa-tours-and-travels-e9ea2-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId:         "maa-tours-and-travels-e9ea2",
+  storageBucket:     "maa-tours-and-travels-e9ea2.firebasestorage.app",
+  messagingSenderId: "259537402915",
+  appId:             "1:259537402915:web:03db0cbdf467b986d54596",
+  measurementId:     "G-7QHGQK386C"
+};
+
+(async function _fbAutoInit() {
+  // Wait for Firebase SDK to be available (loaded from CDN)
+  let attempts = 0;
+  while (typeof firebase === 'undefined' && attempts < 50) {
+    await new Promise(r => setTimeout(r, 100));
+    attempts++;
+  }
+  if (typeof firebase === 'undefined') {
+    console.warn('[Firebase] SDK failed to load after 5s — using localStorage only');
+    _fbUpdateBanner('error');
+    return;
+  }
+  // Always use the hardcoded config — save it to localStorage too
+  localStorage.setItem(FIREBASE_CFG_KEY, JSON.stringify(MAA_FIREBASE_CONFIG));
+  _fbUpdateBanner('connecting');
+  const ok = await _fbInit(MAA_FIREBASE_CONFIG);
+  if (ok) {
+    await _fbLoadFromFirestore();
+  }
+})();
+
+/* ── Status banner ── */
+function _fbUpdateBanner(state) {
+  const dot  = document.getElementById('maa-fb-dot');
+  const txt  = document.getElementById('maa-fb-txt');
+  const bar  = document.getElementById('maa-fb-bar');
+
+  const MAP = {
+    connected:    { icon:'🟢', text:'Firebase সংযুক্ত — ক্লাউডে সেভ হচ্ছে', col:'#10D876', bg:'rgba(16,216,118,0.12)', border:'rgba(16,216,118,0.35)' },
+    connecting:   { icon:'🔵', text:'Firebase সংযুক্ত হচ্ছে…',               col:'#4B9FFF', bg:'rgba(75,159,255,0.12)', border:'rgba(75,159,255,0.35)' },
+    saving:       { icon:'⏳', text:'ক্লাউডে সেভ হচ্ছে…',                    col:'#FFAA33', bg:'rgba(255,170,51,0.12)',  border:'rgba(255,170,51,0.35)'  },
+    saved:        { icon:'✅', text:'ক্লাউডে সেভ হয়েছে!',                    col:'#10D876', bg:'rgba(16,216,118,0.12)', border:'rgba(16,216,118,0.35)' },
+    error:        { icon:'🔴', text:'Firebase ত্রুটি — localStorage ব্যবহার', col:'#FF4D6D', bg:'rgba(255,77,109,0.12)', border:'rgba(255,77,109,0.35)'  },
+    disconnected: { icon:'🟡', text:'Firebase সংযুক্ত নয় — Settings-এ যান',  col:'#FFAA33', bg:'rgba(255,170,51,0.12)',  border:'rgba(255,170,51,0.35)'  },
+  };
+  const c = MAP[state] || MAP.disconnected;
+
+  // Update settings card elements
+  if (dot) { dot.textContent = c.icon; }
+  if (txt) { txt.textContent = c.text; txt.style.color = c.col; }
+
+  // Floating bar
+  let b = document.getElementById('maa-fb-statusbar');
+  if (!b) {
+    b = document.createElement('div');
+    b.id = 'maa-fb-statusbar';
+    b.style.cssText = 'position:fixed;bottom:18px;right:18px;z-index:99999;display:flex;align-items:center;gap:10px;padding:10px 16px;border-radius:12px;font-size:12.5px;font-family:var(--font,sans-serif);cursor:pointer;transition:opacity .3s,background .3s;box-shadow:0 4px 20px rgba(0,0,0,0.4)';
+    b.title = 'Firebase সেটিংস';
+    b.onclick = () => openFirebaseSettings();
+    document.body.appendChild(b);
+  }
+  b.style.background = c.bg;
+  b.style.border = '1px solid ' + c.border;
+  b.innerHTML = `<span style="font-size:15px">${c.icon}</span><span style="color:var(--text-2,#C8D8EE)">${c.text}</span>`;
+
+  // Fade out after a bit if connected/saved
+  clearTimeout(b._fadeTimer);
+  if (state === 'connected' || state === 'saved') {
+    b._fadeTimer = setTimeout(() => { b.style.opacity = '0.3'; }, 4000);
+    b.onmouseenter = () => b.style.opacity = '1';
+    b.onmouseleave = () => b.style.opacity = '0.3';
+  } else {
+    b.style.opacity = '1';
+    b.onmouseenter = null;
+    b.onmouseleave = null;
+  }
+}
+
+/* ── Save ALL data to Firestore ── */
+async function _fbSaveToFirestore(snap) {
+  if (!window._fbReady || !window._fbDb) return false;
+  try {
+    _fbUpdateBanner('saving');
+    const ref = window._fbDb.collection('maa_crm').doc('main_data');
+    // Split large arrays into sub-documents to stay under 1MB Firestore limit
+    const meta = { _version: snap._version, _savedAt: snap._savedAt };
+    await ref.set(meta, { merge: true });
+
+    const COLLECTIONS = ['clients','leads','bookings','quotes','suppliers','invoices',
+      'itineraries','income','expenses','services','customServices','targets',
+      'whatsappTemplates','tasks','activityLog','tags'];
+
+    // Use batched writes (max 500 ops per batch)
+    let batch = window._fbDb.batch();
+    let opCount = 0;
+    const flushBatch = async () => { await batch.commit(); batch = window._fbDb.batch(); opCount = 0; };
+
+    for (const col of COLLECTIONS) {
+      const colRef = window._fbDb.collection('maa_crm').doc('main_data').collection(col);
+      const arr = snap[col] || [];
+
+      // Write each item as a doc by its id
+      for (const item of arr) {
+        const docId = String(item.id || item.ref || (col + '_' + Math.random().toString(36).slice(2)));
+        const docRef = colRef.doc(docId);
+        batch.set(docRef, { ...item, _docId: docId });
+        opCount++;
+        if (opCount >= 490) await flushBatch();
+      }
+    }
+    if (opCount > 0) await flushBatch();
+
+    // Also save secondary localStorage-keyed stores to Firestore
+    const SECONDARY_KEYS = [
+      'maa_commissions','maa_visas','maa_grouptours','maa_docs','maa_staff',
+      'maa_leadscore','maa_loyalty','maa_reviews','maa_expenses',
+      'maa_wa_send_log','maa_wa_scheduled','maa_company_settings',
+      'mfs_provider_settings_v1','maa_sms_config','maa_emailjs_config',
+      'maa_currency_rates','maa_rates','contact_intelligence_v1',
+      'maa_flightsearch','maa_insurance','maa_forex_tx'
+    ];
+    const secRef = window._fbDb.collection('maa_crm').doc('secondary_data');
+    const secSnap = {};
+    SECONDARY_KEYS.forEach(k => {
+      try { const v = localStorage.getItem(k); if (v) secSnap[k] = v; } catch(e) {}
+    });
+    if (Object.keys(secSnap).length) await secRef.set(secSnap, { merge: true });
+
+    _fbUpdateBanner('saved');
+    setTimeout(() => _fbUpdateBanner('connected'), 2500);
+    return true;
+  } catch(e) {
+    console.warn('[Firebase] Save failed:', e);
+    _fbUpdateBanner('error');
+    return false;
+  }
+}
+
+/* ── Load ALL data from Firestore ── */
+async function _fbLoadFromFirestore() {
+  if (!window._fbReady || !window._fbDb) return false;
+  try {
+    const ref = window._fbDb.collection('maa_crm').doc('main_data');
+    const snap = await ref.get();
+    if (!snap.exists) {
+      console.log('[Firebase] No data in Firestore yet — will save on first change');
+      _fbUpdateBanner('connected');
+      return false;
+    }
+
+    const COLLECTIONS = ['clients','leads','bookings','quotes','suppliers','invoices',
+      'itineraries','income','expenses','services','customServices','targets',
+      'whatsappTemplates','tasks','activityLog','tags'];
+
+    const loaded = {};
+    for (const col of COLLECTIONS) {
+      const colSnap = await ref.collection(col).get();
+      loaded[col] = colSnap.docs.map(d => { const dta = d.data(); delete dta._docId; return dta; });
+    }
+    loaded._version = snap.data()._version || 'maa-crm-db-v1';
+    loaded._savedAt = snap.data()._savedAt || new Date().toISOString();
+    _applySnapshot(loaded);
+
+    // Restore secondary localStorage keys from Firestore
+    const secSnap = await window._fbDb.collection('maa_crm').doc('secondary_data').get();
+    if (secSnap.exists) {
+      const secData = secSnap.data();
+      Object.keys(secData).forEach(k => {
+        try { if (secData[k]) localStorage.setItem(k, secData[k]); } catch(e) {}
+      });
+    }
+
+    // Also update localStorage cache
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(_buildSnapshot()));
+
+    // Re-render all views
+    setTimeout(() => {
+      ['renderClients','renderBookings','renderQuotes','renderSuppliers',
+       'renderInvoices','renderItineraries','renderDashboard','renderPipeline',
+       'renderTaskPanel','renderTagsUI'].forEach(fn => {
+        if (typeof window[fn] === 'function') try { window[fn](); } catch(e) {}
+      });
+    }, 200);
+
+    _fbUpdateBanner('connected');
+    if (typeof showUniToast === 'function')
+      showUniToast('🔥 Firebase লোড হয়েছে — ' + (loaded.clients||[]).length + ' ক্লায়েন্ট, ' + (loaded.bookings||[]).length + ' বুকিং', 'success');
+    return true;
+  } catch(e) {
+    console.warn('[Firebase] Load failed:', e);
+    _fbUpdateBanner('error');
+    return false;
+  }
+}
+
+/* ── SAVE ALL DATA (Firebase + localStorage fallback) ── */
 function saveAllData() {
   try {
     const snap = _buildSnapshot();
     const json = JSON.stringify(snap);
-    // Always save to localStorage as fallback
+    // Always save to localStorage as instant fallback
     localStorage.setItem(STORAGE_KEY, json);
-    // Also write to DB file if connected
+    // Save to Firebase if connected
+    if (window._fbReady) {
+      _fbSaveToFirestore(snap).catch(e => console.warn('[Firebase] Async save error:', e));
+    }
+    // Also write to DB file if connected (legacy)
     if (window._maaFsReady && window._maaFsHandle) {
-      _writeDbFile(window._maaFsHandle, JSON.stringify(snap, null, 2)).catch(async e => {
-        // Handle might have gone stale — try to re-verify
+      _writeDbFile(window._maaFsHandle, JSON.stringify(snap, null, 2)).catch(e => {
         if (e.name === 'NotAllowedError' || e.name === 'SecurityError') {
           window._maaFsReady = false;
-          _showDbBanner('disconnected');
-          if (typeof showUniToast === 'function')
-            showUniToast('⚠️ DB ফাইলে লেখার অনুমতি নেই। পেজ রিলোড করুন।', 'error');
         }
         console.warn('DB write error:', e);
       });
@@ -23009,15 +23283,20 @@ function saveAllData() {
   } catch(e) { console.warn('Save failed:', e); }
 }
 
-/* ── LOAD ALL DATA (DB file first, then localStorage fallback) ── */
+/* ── LOAD ALL DATA (Firebase first, then FileSystem, then localStorage) ── */
 async function loadAllData() {
   let loaded = false;
 
-  // Try DB file first (if handle was stored in IDB)
+  // 1. Try Firebase first
+  if (window._fbReady) {
+    loaded = await _fbLoadFromFirestore();
+    if (loaded) return;
+  }
+
+  // 2. Try DB file (legacy)
   try {
     const handle = await _idb.get(FS_HANDLE_KEY);
     if (handle) {
-      // Verify permission
       let perm = await handle.queryPermission({ mode: 'readwrite' });
       if (perm === 'prompt') perm = await handle.requestPermission({ mode: 'readwrite' });
       if (perm === 'granted') {
@@ -23030,21 +23309,13 @@ async function loadAllData() {
             window._maaFsHandle = handle;
             window._maaFsReady  = true;
             loaded = true;
-            _showDbBanner('connected');
-            if (typeof showUniToast === 'function')
-              showUniToast('🗄️ DB সংযুক্ত — ' + (data.clients||[]).length + ' ক্লায়েন্ট, ' + (data.bookings||[]).length + ' বুকিং', 'success');
           }
         }
-      } else {
-        // Permission denied — show disconnected
-        _showDbBanner('disconnected');
       }
     }
-  } catch(e) {
-    console.warn('DB file load failed, falling back to localStorage:', e);
-  }
+  } catch(e) { console.warn('DB file load failed:', e); }
 
-  // Fallback to localStorage if DB not loaded
+  // 3. Fallback: localStorage
   if (!loaded) {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
@@ -23052,14 +23323,180 @@ async function loadAllData() {
         const parsed = JSON.parse(saved);
         _applySnapshot(parsed);
         if (typeof showUniToast === 'function')
-          showUniToast('✅ ডেটা লোড হয়েছে — ' + (data.clients||[]).length + ' ক্লায়েন্ট, ' + (data.bookings||[]).length + ' বুকিং', 'success');
+          showUniToast('✅ ডেটা লোড হয়েছে — ' + (data.clients||[]).length + ' ক্লায়েন্ট', 'success');
       }
     } catch(e) { console.warn('localStorage load failed:', e); }
-    // Show banner prompting to connect DB (only if no handle stored)
-    const storedHandle = await _idb.get(FS_HANDLE_KEY).catch(() => null);
-    if (!storedHandle) _showDbBanner('disconnected');
+    // Show Firebase setup prompt if no Firebase
+    if (!window._fbReady) {
+      _fbUpdateBanner('disconnected');
+    }
   }
 }
+
+/* ── Firebase Settings Panel ── */
+window.openFirebaseSettings = function() {
+  const existing = document.getElementById('maa-fb-settings-dialog');
+  if (existing) { existing.remove(); return; }
+  const cfg = _fbLoadConfig() || {};
+  const connected = window._fbReady;
+  const dlg = document.createElement('div');
+  dlg.id = 'maa-fb-settings-dialog';
+  dlg.style.cssText = 'position:fixed;inset:0;z-index:999999;background:rgba(0,0,0,0.75);display:flex;align-items:center;justify-content:center';
+  dlg.innerHTML = `
+  <div style="background:var(--ink-2,#0D1526);border:1px solid var(--border-2,rgba(255,255,255,0.18));border-radius:20px;padding:28px 28px 22px;width:520px;max-width:96vw;max-height:92vh;overflow-y:auto;box-shadow:0 24px 64px rgba(0,0,0,0.7)">
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:20px">
+      <span style="font-size:28px">🔥</span>
+      <div>
+        <div style="font-size:17px;font-weight:700;color:var(--text,#F4F7FF)">Firebase Firestore সেটিংস</div>
+        <div style="font-size:12px;color:var(--text-3,#8FA8C8)">সব ডেটা রিয়েল-টাইম ক্লাউডে সেভ হবে — কোনো ক্লিক ছাড়াই</div>
+      </div>
+      <button onclick="document.getElementById('maa-fb-settings-dialog').remove()" style="margin-left:auto;background:none;border:none;color:var(--text-3);font-size:24px;cursor:pointer">×</button>
+    </div>
+
+    <div id="maa-fb-conn-status" style="padding:11px 14px;border-radius:10px;font-size:12.5px;margin-bottom:18px;${connected ? 'background:rgba(16,216,118,0.1);border:1px solid rgba(16,216,118,0.3);color:#10D876' : 'background:rgba(255,170,51,0.1);border:1px solid rgba(255,170,51,0.3);color:#FFAA33'}">
+      ${connected ? '✅ Firebase সংযুক্ত আছে। সব ডেটা স্বয়ংক্রিয়ভাবে ক্লাউডে সেভ হচ্ছে।' : '⚠️ Firebase সংযুক্ত নয়। নিচে Firebase Config দিন।'}
+    </div>
+
+    <div style="background:rgba(240,165,0,0.07);border:1px solid rgba(240,165,0,0.2);border-radius:12px;padding:14px;margin-bottom:18px;font-size:12px;color:var(--text-2,#C8D8EE);line-height:1.8">
+      <b style="color:var(--gold,#F0A500)">কীভাবে পাবেন:</b><br>
+      1. <a href="https://console.firebase.google.com" target="_blank" style="color:#4B9FFF">console.firebase.google.com</a> → নতুন Project তৈরি করুন<br>
+      2. Project Settings → "Your apps" → Web App (<b>&lt;/&gt;</b>) যোগ করুন<br>
+      3. "firebaseConfig" অবজেক্টের মান নিচে পেস্ট করুন<br>
+      4. Firestore Database → Create Database → Start in test mode
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+      ${[
+        ['apiKey','API Key','AIzaSy...'],
+        ['authDomain','Auth Domain','project.firebaseapp.com'],
+        ['projectId','Project ID','your-project-id'],
+        ['storageBucket','Storage Bucket','project.appspot.com'],
+        ['messagingSenderId','Messaging Sender ID','1234567890'],
+        ['appId','App ID','1:123:web:abc123'],
+      ].map(([k,label,ph]) => `
+        <div>
+          <label style="font-size:11px;color:var(--text-3,#8FA8C8);display:block;margin-bottom:5px">${label}</label>
+          <input id="maa-fb-${k}" value="${cfg[k]||''}" placeholder="${ph}" style="width:100%;background:var(--ink-3,#141E32);border:1px solid var(--border,rgba(255,255,255,0.11));border-radius:8px;padding:9px 11px;color:var(--text,#F4F7FF);font-size:12px;font-family:var(--font-mono,'JetBrains Mono',monospace);outline:none">
+        </div>`).join('')}
+    </div>
+
+    <div id="maa-fb-save-status" style="display:none;padding:10px 13px;border-radius:8px;font-size:12.5px;margin-bottom:14px"></div>
+
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <button onclick="maaFirebaseSaveConfig()" style="flex:1;background:linear-gradient(135deg,#F0A500,#cf8e12);color:#0a0f1a;border:none;border-radius:10px;padding:12px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">
+        🔥 সংযুক্ত করুন ও ডেটা সেভ করুন
+      </button>
+      <button onclick="maaFirebaseDisconnect()" style="background:rgba(255,77,109,0.1);color:#FF4D6D;border:1px solid rgba(255,77,109,0.3);border-radius:10px;padding:12px 16px;font-size:13px;cursor:pointer;font-family:var(--font)">
+        🔌 সংযোগ বিচ্ছিন্ন
+      </button>
+    </div>
+
+    <div style="margin-top:16px;padding:12px;background:rgba(75,159,255,0.07);border:1px solid rgba(75,159,255,0.2);border-radius:10px;font-size:11.5px;color:var(--text-3);line-height:1.7">
+      💡 <b style="color:#4B9FFF">টিপস:</b> একবার সংযুক্ত হলে প্রতিটি ক্লায়েন্ট যোগ, বুকিং, ইনভয়েস — সব স্বয়ংক্রিয়ভাবে Firebase-এ সেভ হবে। অন্য ডিভাইস থেকে একই Config দিয়ে সংযুক্ত হলে সব ডেটা দেখা যাবে।
+    </div>
+  </div>`;
+  dlg.addEventListener('click', e => { if (e.target === dlg) dlg.remove(); });
+  document.body.appendChild(dlg);
+};
+
+window.maaFirebaseSaveConfig = async function() {
+  const get = id => (document.getElementById('maa-fb-'+id)||{}).value || '';
+  const cfg = {
+    apiKey:            get('apiKey'),
+    authDomain:        get('authDomain'),
+    projectId:         get('projectId'),
+    storageBucket:     get('storageBucket'),
+    messagingSenderId: get('messagingSenderId'),
+    appId:             get('appId'),
+  };
+  const status = document.getElementById('maa-fb-save-status');
+  if (!cfg.apiKey || !cfg.projectId) {
+    if (status) { status.style.display='block'; status.style.cssText+='background:rgba(255,77,109,0.1);border:1px solid rgba(255,77,109,0.3);color:#FF4D6D'; status.textContent='❌ API Key এবং Project ID অবশ্যই দিতে হবে'; }
+    return;
+  }
+  if (status) { status.style.display='block'; status.textContent='⏳ Firebase সংযুক্ত হচ্ছে…'; status.style.cssText='display:block;padding:10px 13px;border-radius:8px;font-size:12.5px;margin-bottom:14px;background:rgba(75,159,255,0.1);border:1px solid rgba(75,159,255,0.3);color:#4B9FFF'; }
+  const ok = await _fbInit(cfg);
+  if (ok) {
+    localStorage.setItem(FIREBASE_CFG_KEY, JSON.stringify(cfg));
+    if (status) { status.style.cssText='display:block;padding:10px 13px;border-radius:8px;font-size:12.5px;margin-bottom:14px;background:rgba(16,216,118,0.1);border:1px solid rgba(16,216,118,0.3);color:#10D876'; status.textContent='✅ Firebase সংযুক্ত! সব ডেটা ক্লাউডে সেভ হচ্ছে…'; }
+    // Save current data to Firestore
+    await _fbSaveToFirestore(_buildSnapshot());
+    if (typeof showUniToast === 'function') showUniToast('🔥 Firebase সংযুক্ত ও ডেটা সেভ হয়েছে!', 'success');
+    if (typeof logActivity === 'function') logActivity('🔥 Firebase Firestore সংযুক্ত হয়েছে');
+    setTimeout(() => { const d = document.getElementById('maa-fb-settings-dialog'); if (d) d.remove(); }, 2000);
+  } else {
+    if (status) { status.style.cssText='display:block;padding:10px 13px;border-radius:8px;font-size:12.5px;margin-bottom:14px;background:rgba(255,77,109,0.1);border:1px solid rgba(255,77,109,0.3);color:#FF4D6D'; status.textContent='❌ সংযোগ ব্যর্থ — Config যাচাই করুন। Firebase Console-এ Firestore Database তৈরি আছে কিনা দেখুন।'; }
+  }
+};
+
+window.maaFirebaseDisconnect = async function() {
+  localStorage.removeItem(FIREBASE_CFG_KEY);
+  window._fbReady = false;
+  window._fbDb    = null;
+  if (window._fbApp) { try { await window._fbApp.delete(); } catch(e) {} window._fbApp = null; }
+  _fbUpdateBanner('disconnected');
+  const dlg = document.getElementById('maa-fb-settings-dialog');
+  if (dlg) dlg.remove();
+  if (typeof showUniToast === 'function') showUniToast('🔌 Firebase সংযোগ বিচ্ছিন্ন হয়েছে। localStorage ব্যবহার হচ্ছে।', 'info');
+};
+
+/* ── Patch all individual localStorage keys to also sync to Firestore ── */
+(function _patchLocalStorageForFirebase() {
+  const WATCHED_KEYS = new Set([
+    'maa_commissions','maa_visas','maa_grouptours','maa_docs','maa_staff',
+    'maa_leadscore','maa_loyalty','maa_reviews','maa_expenses',
+    'maa_wa_send_log','maa_wa_scheduled','maa_company_settings',
+    'mfs_provider_settings_v1','maa_sms_config','maa_emailjs_config',
+    'maa_currency_rates','maa_rates','contact_intelligence_v1',
+    'maa_flightsearch','maa_insurance','maa_forex_tx'
+  ]);
+  const _origSet = localStorage.setItem.bind(localStorage);
+  localStorage.setItem = function(key, value) {
+    _origSet(key, value);
+    if (WATCHED_KEYS.has(key) && window._fbReady && window._fbDb) {
+      // Debounce secondary saves
+      clearTimeout(window._fbSecondaryTimer);
+      window._fbSecondaryTimer = setTimeout(async () => {
+        try {
+          const secRef = window._fbDb.collection('maa_crm').doc('secondary_data');
+          const patch = {};
+          WATCHED_KEYS.forEach(k => {
+            try { const v = localStorage.getItem(k); if (v) patch[k] = v; } catch(e) {}
+          });
+          if (Object.keys(patch).length) await secRef.set(patch, { merge: true });
+        } catch(e) { console.warn('[Firebase] Secondary key sync error:', e); }
+      }, 1500);
+    }
+  };
+})();
+
+/* ── Expose Firebase Settings for Settings page ── */
+window.renderFirebaseSettingsCard = function() {
+  const cfg = _fbLoadConfig() || {};
+  const connected = window._fbReady;
+  return `
+  <div style="margin-top:20px;background:linear-gradient(135deg,rgba(240,100,0,0.08),rgba(240,165,0,0.04));border:1px solid rgba(240,100,0,0.25);border-radius:14px;padding:20px">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+      <span style="font-size:22px">🔥</span>
+      <div>
+        <div style="font-size:14px;font-weight:700;color:var(--text)">Firebase Firestore (Cloud Database)</div>
+        <div style="font-size:12px;color:var(--text-3)">প্রতিটি সেভ সরাসরি ক্লাউডে — কোনো ক্লিক ছাড়াই</div>
+      </div>
+      <span id="maa-fb-dot" style="margin-left:auto;font-size:18px">${connected ? '🟢' : '🔴'}</span>
+    </div>
+    <div id="maa-fb-txt" style="font-size:12.5px;margin-bottom:14px;color:${connected ? '#10D876' : '#FFAA33'}">
+      ${connected ? '✅ Firebase সংযুক্ত আছে। সব ডেটা স্বয়ংক্রিয়ভাবে ক্লাউডে সেভ হচ্ছে।' : '⚠️ Firebase সংযুক্ত নয় — নিচের বাটনে ক্লিক করে Config দিন।'}
+    </div>
+    <button onclick="openFirebaseSettings()" style="width:100%;background:linear-gradient(135deg,rgba(240,100,0,0.2),rgba(240,165,0,0.12));color:var(--gold-light,#FFD166);border:1px solid rgba(240,165,0,0.35);border-radius:10px;padding:11px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">
+      🔥 Firebase ${connected ? 'সেটিংস দেখুন / পরিবর্তন করুন' : 'সংযুক্ত করুন'}
+    </button>
+  </div>`;
+};
+
+/* ── SAVE ALL DATA (localStorage + DB file if connected) ── */
+/* NOTE: saveAllData already defined above with Firebase integration — this block is the patched version */
+
+/* ── LOAD ALL DATA — already replaced above ── */
 
 // Auto-save on any mutation — patch key functions
 const _origAddClient = window.addClient;
@@ -23075,7 +23512,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }, 300);
 });
 
-// Patch save calls to also persist to DB file
+// Patch save calls to also persist to Firebase/DB
 ['addClient','addLead','addBooking','addQuote','addSupplier','addInvoice','addItinerary',
  'saveEditClient','saveEditBooking','saveEditQuote','saveEditSupplier','saveEditInvoice',
  'deleteClient','deleteLead','deleteBooking','deleteQuote','deleteSupplier','deleteInvoice','deleteItinerary',
@@ -43041,13 +43478,16 @@ console.log('✅ Quick Send Engine v144 loaded');
    v1.4.6 — TITLE UPDATE
 ══════════════════════════════════════════════════════ */
 (function(){
-  document.title = 'Maa Tours & Travels — CRM v1.4.7 | QR Code Documents';
-  console.log('%c✅ Maa CRM v1.4.6 loaded', 'color:#F0A500;font-weight:bold;font-size:14px');
-  console.log('%c  ► IndexedDB KV Store (50-100MB)', 'color:#10D876;font-size:12px');
-  console.log('%c  ► Service Worker (Offline Support)', 'color:#4B9FFF;font-size:12px');
-  console.log('%c  ► Enhanced Tax + Double-Entry Bookkeeping', 'color:#FFAA33;font-size:12px');
-  console.log('%c  ► EmailJS Auto-Init', 'color:#A855F7;font-size:12px');
+  document.title = 'Maa Tours & Travels — CRM v1.5.0 | Firebase Cloud Connected 🔥';
+  console.log('%c🔥 Maa CRM v1.5.0 — Firebase Cloud Connected', 'color:#F0A500;font-weight:bold;font-size:14px');
+  console.log('%c  ► Project: maa-tours-and-travels-e9ea2', 'color:#10D876;font-size:12px');
+  console.log('%c  ► Auto-Save to Firestore on every click', 'color:#4B9FFF;font-size:12px');
+  console.log('%c  ► IndexedDB KV Store (50-100MB offline)', 'color:#FFAA33;font-size:12px');
 })();
 </script>
+
+<!-- ══ Firebase SDK — loaded LAST so all page JS is already parsed ══ -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 </body>
 </html>
